@@ -1,5 +1,6 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:alarm/alarm.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -41,6 +42,30 @@ void main() async {
   try {
     await SupabaseService.instance.init(userId, fcmToken: fcmToken);
   } catch (_) {}
+
+  if (!kIsWeb) {
+    bool guardianAlarmRinging = false;
+
+    Alarm.ringStream.stream.listen((alarmSettings) {
+      if (alarmSettings.id == 88888) {
+        guardianAlarmRinging = true;
+      }
+    });
+
+    Alarm.updateStream.stream.listen((_) async {
+      if (!guardianAlarmRinging) return;
+      final active = await Alarm.getAlarms();
+      final stillActive = active.any((a) => a.id == 88888);
+      if (stillActive) return;
+
+      guardianAlarmRinging = false;
+      final guardianId = prefs.getString('last_guardian_id');
+      if (guardianId != null && guardianId.isNotEmpty) {
+        await SupabaseService.instance.sendAlarmAckTrigger(guardianId);
+        await prefs.remove('last_guardian_id');
+      }
+    });
+  }
 
   // Determine start screen
   final username = prefs.getString('username');

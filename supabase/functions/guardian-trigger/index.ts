@@ -70,7 +70,11 @@ serve(async (req) => {
   const payload = await req.json();
   const record = payload.record; // new row inserted into triggers table
 
-  if (record.type !== "guardian_trigger") {
+  if (
+    record.type !== "guardian_trigger" &&
+    record.type !== "log_taken" &&
+    record.type !== "alarm_ack"
+  ) {
     return new Response("ignored", { status: 200 });
   }
 
@@ -95,6 +99,19 @@ serve(async (req) => {
   const serviceAccount = JSON.parse(Deno.env.get("FIREBASE_SERVICE_ACCOUNT")!);
   const accessToken = await getFcmAccessToken(serviceAccount);
 
+  const title =
+    record.type === "guardian_trigger"
+      ? "🚨 Guardian Alert"
+      : record.type === "alarm_ack"
+      ? "✅ Alarm acknowledged"
+      : "✅ Medication taken";
+  const body =
+    record.type === "guardian_trigger"
+      ? "Your guardian is asking you to take your medicine NOW"
+      : record.type === "alarm_ack"
+      ? "The user acknowledged your alarm."
+      : "The user marked a dose as taken.";
+
   // Send via FCM HTTP v1 API
   const fcmRes = await fetch(
     `https://fcm.googleapis.com/v1/projects/${serviceAccount.project_id}/messages:send`,
@@ -107,7 +124,8 @@ serve(async (req) => {
       body: JSON.stringify({
         message: {
           token: user.fcm_token,
-          data: { type: "guardian_trigger" },
+          notification: { title, body },
+          data: { type: record.type, from_user_id: String(record.from_user_id ?? "") },
           android: { priority: "high" },
         },
       }),

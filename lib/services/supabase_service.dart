@@ -116,6 +116,26 @@ class SupabaseService {
     return List<Map<String, dynamic>>.from(res as List);
   }
 
+  Future<List<String>> getApprovedGuardianIds() async {
+    final rows = await getApprovedGuardians();
+    return rows
+        .map((r) => r['guardian_id'])
+        .whereType<String>()
+        .where((s) => s.isNotEmpty)
+        .toList();
+  }
+
+  Future<String?> getRelationshipStatusForGuardian(String targetUserId) async {
+    if (_userId == null) return null;
+    final res = await _db
+        .from('guardian_relationships')
+        .select('status')
+        .eq('user_id', targetUserId)
+        .eq('guardian_id', _userId!)
+        .maybeSingle();
+    return res == null ? null : res['status'] as String?;
+  }
+
   Future<void> respondToGuardianRequest(String relationshipId,
       {required bool approve}) async {
     await _db
@@ -135,6 +155,32 @@ class SupabaseService {
       });
     } catch (e) {
       print('Supabase trigger error: $e');
+    }
+  }
+
+  Future<void> sendLogTakenTrigger(String guardianId) async {
+    if (!_initialized) return;
+    try {
+      await _db.from('triggers').insert({
+        'target_user_id': guardianId,
+        'from_user_id': _userId,
+        'type': 'log_taken',
+      });
+    } catch (e) {
+      print('Supabase log_taken trigger error: $e');
+    }
+  }
+
+  Future<void> sendAlarmAckTrigger(String guardianId) async {
+    if (!_initialized) return;
+    try {
+      await _db.from('triggers').insert({
+        'target_user_id': guardianId,
+        'from_user_id': _userId,
+        'type': 'alarm_ack',
+      });
+    } catch (e) {
+      print('Supabase alarm_ack trigger error: $e');
     }
   }
 

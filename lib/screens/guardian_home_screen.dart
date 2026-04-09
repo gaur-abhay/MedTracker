@@ -15,6 +15,7 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
   final _searchController = TextEditingController();
   String? _watchingUsername;
   String? _watchingUserId;
+  String? _relationshipStatus; // approved | pending | rejected | null
   bool _searching = false;
   bool _triggering = false;
   String? _searchError;
@@ -33,6 +34,11 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
     });
     if (_watchingUsername != null) {
       _searchController.text = _watchingUsername!;
+    }
+    if (_watchingUserId != null) {
+      final status = await SupabaseService.instance
+          .getRelationshipStatusForGuardian(_watchingUserId!);
+      if (mounted) setState(() => _relationshipStatus = status);
     }
   }
 
@@ -75,6 +81,7 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
       setState(() {
         _watchingUsername = username;
         _watchingUserId = targetUserId;
+        _relationshipStatus = 'pending';
         _searchError = null;
       });
 
@@ -92,6 +99,7 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
 
   Future<void> _triggerAlarm() async {
     if (_watchingUserId == null) return;
+    if (_relationshipStatus != 'approved') return;
     setState(() => _triggering = true);
     try {
       await SupabaseService.instance.sendGuardianTrigger(_watchingUserId!);
@@ -204,7 +212,9 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
               child: SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
-                  onPressed: _triggering ? null : _triggerAlarm,
+                  onPressed: (_triggering || _relationshipStatus != 'approved')
+                      ? null
+                      : _triggerAlarm,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.red,
                     foregroundColor: Colors.white,
@@ -229,6 +239,24 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
               ),
             ),
 
+            if (_relationshipStatus != 'approved')
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Card(
+                  color: const Color(0xFFFFF3E0),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Text(
+                      _relationshipStatus == 'pending'
+                          ? 'Request sent. Waiting for user approval.'
+                          : 'Not approved yet. Ask the user to approve you in “Manage Guardians”.',
+                      style: const TextStyle(color: Colors.orange),
+                    ),
+                  ),
+                ),
+              ),
+
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
               child: Align(
@@ -245,7 +273,14 @@ class _GuardianHomeScreenState extends State<GuardianHomeScreen> {
             ),
 
             Expanded(
-              child: StreamBuilder<List<MedicationLog>>(
+              child: (_relationshipStatus != 'approved')
+                  ? const Center(
+                      child: Text(
+                        'Approve required to view logs.',
+                        style: TextStyle(color: Colors.grey),
+                      ),
+                    )
+                  : StreamBuilder<List<MedicationLog>>(
                 stream: SupabaseService.instance.watchUserLogs(_watchingUserId!),
                 builder: (context, snap) {
                   if (snap.connectionState == ConnectionState.waiting) {

@@ -125,6 +125,16 @@ class NotificationService {
     await _plugin.cancelAll(); // Simpler: cancel all follow-ups and reschedule
   }
 
+  // ── Cancel a specific scheduled dose ─────────────────────────────────────
+
+  Future<void> cancelDose(String medId, DateTime scheduledTime) async {
+    final timeStr = _formatTime(scheduledTime);
+    final alarmId = _alarmId(medId, timeStr);
+    await Alarm.stop(alarmId);
+    await _plugin.cancel(_notifId(medId, timeStr, 10));
+    await _plugin.cancel(_notifId(medId, timeStr, 20));
+  }
+
   // ── One-shot "taken" confirmation notification ────────────────────────────
 
   Future<void> notifyTaken(MedicationLog log) async {

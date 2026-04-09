@@ -17,6 +17,7 @@ class _GuardianScreenState extends State<GuardianScreen> {
   int _tab = 0;
   final _codeController = TextEditingController();
   String? _watchingUserId;
+  String? _relationshipStatus;
   bool _triggering = false;
 
   @override
@@ -27,13 +28,24 @@ class _GuardianScreenState extends State<GuardianScreen> {
 
   Future<void> _loadWatchedUser() async {
     final prefs = await SharedPreferences.getInstance();
-    setState(() => _watchingUserId = prefs.getString('watching_user_id'));
+    final watchingUserId = prefs.getString('watching_user_id');
+    setState(() => _watchingUserId = watchingUserId);
+    if (watchingUserId != null) {
+      final status = await SupabaseService.instance
+          .getRelationshipStatusForGuardian(watchingUserId);
+      if (mounted) setState(() => _relationshipStatus = status);
+    }
   }
 
   Future<void> _saveWatchedUser(String userId) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('watching_user_id', userId);
-    setState(() => _watchingUserId = userId);
+    final status =
+        await SupabaseService.instance.getRelationshipStatusForGuardian(userId);
+    setState(() {
+      _watchingUserId = userId;
+      _relationshipStatus = status ?? 'pending';
+    });
   }
 
   @override
@@ -79,6 +91,7 @@ class _GuardianScreenState extends State<GuardianScreen> {
 
   Future<void> _triggerAlarm() async {
     if (_watchingUserId == null) return;
+    if (_relationshipStatus != 'approved') return;
     setState(() => _triggering = true);
     try {
       await SupabaseService.instance.sendGuardianTrigger(_watchingUserId!);
@@ -193,6 +206,7 @@ class _WatchTab extends StatefulWidget {
 
 class _WatchTabState extends State<_WatchTab> {
   final _controller = TextEditingController();
+  String? _relationshipStatus;
 
   @override
   void initState() {
@@ -200,6 +214,14 @@ class _WatchTabState extends State<_WatchTab> {
     if (widget.watchingUserId != null) {
       _controller.text = widget.watchingUserId!;
     }
+    _loadStatus();
+  }
+
+  Future<void> _loadStatus() async {
+    final id = widget.watchingUserId;
+    if (id == null) return;
+    final status = await SupabaseService.instance.getRelationshipStatusForGuardian(id);
+    if (mounted) setState(() => _relationshipStatus = status);
   }
 
   @override
@@ -245,12 +267,29 @@ class _WatchTabState extends State<_WatchTab> {
           ),
         ),
         if (widget.watchingUserId != null) ...[
+          if (_relationshipStatus != 'approved')
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Card(
+                color: const Color(0xFFFFF3E0),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                child: const Padding(
+                  padding: EdgeInsets.all(12),
+                  child: Text(
+                    'Waiting for user approval before you can view logs or trigger alarms.',
+                    style: TextStyle(color: Colors.orange),
+                  ),
+                ),
+              ),
+            ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: widget.triggering ? null : widget.onTrigger,
+                onPressed: (widget.triggering || _relationshipStatus != 'approved')
+                    ? null
+                    : widget.onTrigger,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.red,
                   foregroundColor: Colors.white,
@@ -286,7 +325,9 @@ class _WatchTabState extends State<_WatchTab> {
           ),
           Expanded(
             child: StreamBuilder<List<MedicationLog>>(
-              stream: SupabaseService.instance.watchUserLogs(widget.watchingUserId!),
+              stream: _relationshipStatus != 'approved'
+                  ? const Stream.empty()
+                  : SupabaseService.instance.watchUserLogs(widget.watchingUserId!),
               builder: (context, snap) {
                 if (snap.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
