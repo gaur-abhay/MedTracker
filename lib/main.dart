@@ -6,8 +6,11 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
+import 'models/user_profile.dart';
 import 'providers/medication_provider.dart';
 import 'screens/home_screen.dart';
+import 'screens/guardian_home_screen.dart';
+import 'screens/onboarding_screen.dart';
 import 'services/firebase_service.dart';
 import 'services/notification_service.dart';
 import 'services/supabase_service.dart';
@@ -15,15 +18,12 @@ import 'services/supabase_service.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Supabase (database)
   await SupabaseService.initialize();
 
-  // Local notifications + alarms (Android only)
   if (!kIsWeb) {
     await NotificationService.instance.init();
   }
 
-  // Stable user ID
   final prefs = await SharedPreferences.getInstance();
   String? userId = prefs.getString('userId');
   if (userId == null) {
@@ -31,26 +31,37 @@ void main() async {
     await prefs.setString('userId', userId);
   }
 
-  // Firebase (FCM only — free, no Blaze needed)
   String? fcmToken;
   try {
     await Firebase.initializeApp();
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
     fcmToken = await FcmService.instance.init();
-  } catch (_) {
-    // Firebase not configured yet — runs without push notifications
-  }
+  } catch (_) {}
 
-  // Supabase service (register user + FCM token)
   try {
     await SupabaseService.instance.init(userId, fcmToken: fcmToken);
   } catch (_) {}
 
-  runApp(const MedicationApp());
+  // Determine start screen
+  final username = prefs.getString('username');
+  final roleStr = prefs.getString('role');
+  final isOnboarded = username != null && roleStr != null;
+
+  Widget home;
+  if (!isOnboarded) {
+    home = const OnboardingScreen();
+  } else if (roleStr == UserRole.guardian.name) {
+    home = const GuardianHomeScreen();
+  } else {
+    home = const HomeScreen();
+  }
+
+  runApp(MedicationApp(home: home));
 }
 
 class MedicationApp extends StatelessWidget {
-  const MedicationApp({super.key});
+  final Widget home;
+  const MedicationApp({super.key, required this.home});
 
   @override
   Widget build(BuildContext context) {
@@ -60,12 +71,10 @@ class MedicationApp extends StatelessWidget {
         title: 'MedTrack',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFF2E7D32),
-          ),
+          colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2E7D32)),
           useMaterial3: true,
         ),
-        home: const HomeScreen(),
+        home: home,
       ),
     );
   }

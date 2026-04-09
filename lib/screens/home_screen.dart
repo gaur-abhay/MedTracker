@@ -5,7 +5,7 @@ import '../models/medication_log.dart';
 import '../providers/medication_provider.dart';
 import 'add_medication_screen.dart';
 import 'history_screen.dart';
-import 'guardian_screen.dart';
+import 'manage_guardians_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -47,11 +47,11 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.people_outline),
-            tooltip: 'Guardian',
+            icon: const Icon(Icons.shield_outlined),
+            tooltip: 'Manage Guardians',
             onPressed: () => Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => const GuardianScreen()),
+              MaterialPageRoute(builder: (_) => const ManageGuardiansScreen()),
             ),
           ),
         ],

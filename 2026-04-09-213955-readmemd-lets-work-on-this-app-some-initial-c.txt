@@ -1,4 +1,4 @@
-╭─── Claude Code v2.1.96 ──────────────────────────────────────────────────────╮
+╭─── Claude Code v2.1.97 ──────────────────────────────────────────────────────╮
 │                                                    │ Tips for getting        │
 │                 Welcome back Abhay!                │ started                 │
 │                                                    │ Run /init to create a … │
@@ -745,7 +745,7 @@
   collection needs a Cloud Function to relay the FCM push to the target user's
   device. Want me to write that next?
 
-✻ Cogitated for 5m 2s
+✻ Brewed for 5m 2s
 
 ❯ okay                                                                          
 
@@ -1129,7 +1129,7 @@
 ● Hot restart the app. The save button should now work — medications will
   persist in shared_preferences (works on both web and Android).
 
-✻ Cogitated for 51s
+✻ Sautéed for 51s
 
 ❯ Still issue. not working button. Maybe because database is not intergated? or 
    firebase?                                                                    
@@ -1472,7 +1472,7 @@
 
   What step are you on — do you have Node.js installed for the Cloud Function?
 
-✻ Cogitated for 1m 17s
+✻ Crunched for 1m 17s
 
 ❯ I am done till steup 4. Now I want to understand which database i need to     
   create there are different options. Second why do we need firebase functions? 
@@ -1612,7 +1612,7 @@
   killed, and guardians can trigger remote alarms via the Cloud Function → FCM
   flow. Let me know what step you hit a snag on.
 
-✻ Baked for 30s
+✻ Sautéed for 30s
 
 ❯ Instead of Firebase function, can other tool be used like Supabase edge       
   function, as firebase will need blaze plan for functions.                     
@@ -2060,7 +2060,7 @@
   - Firebase project with FCM enabled (free, no Blaze) ✅
   - Firebase Server Key (from Firebase console) ✅
 
-✻ Crunched for 2m 57s
+✻ Churned for 2m 57s
 
 ❯ /cost                                                                         
 
@@ -2251,3 +2251,483 @@
   - Calls FCM HTTP v1 API with that token
 
   No server key needed, no Blaze plan needed.
+
+❯ /export                                                                       
+  ⎿  Conversation exported to: /mnt/c/Users/Kostubh/Desktop/medication-system/20
+     26-04-08-230107-readmemd-lets-work-on-this-app-some-initial-c.txt
+
+❯ App working fine now. However I observed few things that I have shared -      
+  Right now, Guardian uses user id to watch a user and trigger alarm, to make   
+  it friendly, It would be better to use unique user name instead more friendly 
+   and better. What do you think? (While trigger alarm and guardian side        
+  works.)                                                                       
+  I tried app on phone, it works, but few things observed. - When clicked taken 
+   it sends notification to myself (same phone) instead it should send to       
+  guardian, also we need to improve it a bit I believe, right now any one could 
+   be guardian and user, instead I think we should have unique user name for    
+  each and should allow to select to which guardians you want to allow to send  
+  notify from all available and I think at app staring or somewhere we should   
+  first ask them wether they using it as user or guardian that would make       
+  things simple. Let's work on them step by step and implement best way.        
+
+● Good observations. Let me plan this properly before coding, since these
+  changes touch the whole app.
+
+  Issues identified:
+  1. UUID → Username for guardian linking
+  2. "Taken" notification fires locally on the same phone (should go to
+  guardians via FCM)
+  3. No role selection (User vs Guardian)
+  4. No guardian approval system (anyone can watch anyone)
+
+  Plan:
+
+  Phase A — Onboarding
+    ├── First launch: pick username + role (User / Guardian)
+    └── Username stored in Supabase (unique)
+
+  Phase B — Guardian approval system
+    ├── Guardian searches user by username → sends watch request
+    ├── User sees pending requests → approves/rejects
+    └── Only approved guardians get notifications
+
+  Phase C — Fix notifications
+    ├── Remove self-notification on "Taken"
+    └── New edge function: on log update → FCM to approved guardians
+
+  Let me implement phase by phase.
+
+  ---
+  Phase A — Onboarding + Username
+
+  First, the Supabase schema additions. Run this in your SQL editor:
+
+  -- Add username to users
+  alter table users add column username text unique;
+
+  -- Guardian relationships
+  create table guardian_relationships (
+    id uuid default gen_random_uuid() primary key,
+    user_id text not null,
+    guardian_id text not null,
+    guardian_username text,
+    user_username text,
+    status text not null default 'pending',
+    created_at timestamptz default now(),
+    unique(user_id, guardian_id)
+  );
+
+  Now the code:
+
+● Write(lib/models/user_profile.dart)
+  ⎿  Wrote 28 lines to lib/models/user_profile.dart
+       1 enum UserRole { user, guardian }
+       2 
+       3 class UserProfile {
+       4   final String userId;
+       5   final String username;
+       6   final UserRole role;
+       7 
+       8   UserProfile({
+       9     required this.userId,
+      10     required this.username,
+     … +18 lines (ctrl+o to expand)
+
+● Write(lib/screens/onboarding_screen.dart)
+  ⎿  Wrote 269 lines to lib/screens/onboarding_screen.dart
+      1 import 'package:flutter/material.dart';
+      2 import 'package:shared_preferences/shared_preferences.dart';
+      3 import '../models/user_profile.dart';
+      4 import '../services/supabase_service.dart';
+      5 import 'home_screen.dart';
+      6 import 'guardian_home_screen.dart';
+      7 
+      8 class OnboardingScreen extends StatefulWidget {
+      9   const OnboardingScreen({super.key});
+     … +259 lines (ctrl+o to expand)
+
+● Now the Guardian Home Screen:
+
+● Write(lib/screens/guardian_home_screen.dart)
+  ⎿  Wrote 310 lines to lib/screens/guardian_home_screen.dart
+       1 import 'package:flutter/material.dart';
+       2 import 'package:intl/intl.dart';
+       3 import 'package:shared_preferences/shared_preferences.dart';
+       4 import '../models/medication_log.dart';
+       5 import '../services/supabase_service.dart';
+       6 
+       7 class GuardianHomeScreen extends StatefulWidget {
+       8   const GuardianHomeScreen({super.key});
+       9 
+      10   @override
+     … +300 lines (ctrl+o to expand)
+
+● Now add a Guardians management screen for the user to approve/reject requests:
+
+● Write(lib/screens/manage_guardians_screen.dart)
+  ⎿  Wrote 218 lines to lib/screens/manage_guardians_screen.dart
+      1 import 'package:flutter/material.dart';
+      2 import '../services/supabase_service.dart';
+      3 
+      4 class ManageGuardiansScreen extends StatefulWidget {
+      5   const ManageGuardiansScreen({super.key});
+      6 
+      7   @override
+      8   State<ManageGuardiansScreen> createState() => _ManageGuardiansS
+        creenState();
+      9 }
+     … +208 lines (ctrl+o to expand)
+
+● Now update SupabaseService with all the new methods:
+
+● Write(lib/services/supabase_service.dart)
+  ⎿  Added 68 lines, removed 10 lines
+      1  import 'package:supabase_flutter/supabase_flutter.dart';
+      2  import '../models/medication_log.dart';
+      3  
+      4 -// Fill these in from your Supabase project settings → API      
+      4  const _supabaseUrl = 'https://uhwnxshftquopnxtfsnl.supabase.co';
+      6 -const _supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e
+        -yJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVod254c2hmdHF1b3BueHRmc25sIiwic
+        -m9sZSI6ImFub24iLCJpYXQiOjE3NzU2OTg1OTYsImV4cCI6MjA5MTI3NDU5Nn0.S
+        -SZRI5F6RtV_1y5i4kMUSW0LfY417SkcEwW0QOXjIZg';                    
+      5 +const _supabaseAnonKey =                                        
+      6 +    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS
+        +IsInJlZiI6InVod254c2hmdHF1b3BueHRmc25sIiwicm9sZSI6ImFub24iLCJpYX
+        +QiOjE3NzU2OTg1OTYsImV4cCI6MjA5MTI3NDU5Nn0.SSZRI5F6RtV_1y5i4kMUSW
+        +0LfY417SkcEwW0QOXjIZg';                                         
+      7  
+      8  class SupabaseService {
+      9    static SupabaseService? _instance;
+     ...
+      14  
+      15    bool _initialized = false;
+      16    String? _userId;
+      17 +  String? _username;                                           
+      18  
+      19    static Future<void> initialize() async {
+      20      await Supabase.initialize(url: _supabaseUrl, anonKey: _supa
+          baseAnonKey);
+     ...
+      23    Future<void> init(String userId, {String? fcmToken}) async {
+      24      _userId = userId;
+      25      _initialized = true;
+      25 -                                                               
+      26      try {
+      27 -      // Register this device in the users table               
+      27        await _db.from('users').upsert({
+      29 -        'user_id': userId, // Correct column name in SQL       
+      28 +        'id': userId,                                          
+      29          'fcm_token': fcmToken,
+      30          'updated_at': DateTime.now().toIso8601String(),
+      31        });
+     ...
+      34      }
+      35    }
+      36  
+      38 -  // ── Sync a log so guardians can see it ────────────────────
+         -───────────────                                                
+      37 +  // ── Username ──────────────────────────────────────────────
+         +────────────────                                               
+      38  
+      39 +  Future<void> setUsername(String username) async {            
+      40 +    if (_userId == null) return;                               
+      41 +    await _db.from('users').upsert({                           
+      42 +      'id': _userId,                                           
+      43 +      'username': username,                                    
+      44 +      'updated_at': DateTime.now().toIso8601String(),          
+      45 +    });                                                        
+      46 +    _username = username;                                      
+      47 +  }                                                            
+      48 +                                                               
+      49 +  Future<Map<String, dynamic>?> findUserByUsername(String usern
+         +ame) async {                                                   
+      50 +    final res = await _db                                      
+      51 +        .from('users')                                         
+      52 +        .select('id, username')                                
+      53 +        .eq('username', username.toLowerCase())                
+      54 +        .maybeSingle();                                        
+      55 +    return res;                                                
+      56 +  }                                                            
+      57 +                                                               
+      58 +  // ── Medication logs ───────────────────────────────────────
+         +────────────────                                               
+      59 +                                                               
+      60    Future<void> syncLog(MedicationLog log) async {
+      61      if (!_initialized || _userId == null) return;
+      62      try {
+     ...
+      69      }
+      70    }
+      71  
+      52 -  // ── Guardian: stream another user's logs in real-time ─────
+         -───────────────                                                
+      53 -                                                               
+      72    Stream<List<MedicationLog>> watchUserLogs(String targetUserId
+          ) {
+      73      if (!_initialized) return const Stream.empty();
+      56 -                                                               
+      74      return _db
+      75          .from('medication_logs')
+      76          .stream(primaryKey: ['id'])
+     ...
+       80          .map((rows) => rows.map((r) => MedicationLog.fromJson(
+           r)).toList());
+       81    }
+       82  
+       66 -  // ── Guardian: write a trigger — Edge Function picks it up 
+          -→ sends FCM ────                                              
+       83 +  // ── Guardian relationships ───────────────────────────────
+          +─────────────────                                             
+       84  
+       85 +  Future<void> sendWatchRequest(String targetUserId, String ta
+          +rgetUsername) async {                                         
+       86 +    if (_userId == null) return;                              
+       87 +    await _db.from('guardian_relationships').upsert({         
+       88 +      'user_id': targetUserId,                                
+       89 +      'guardian_id': _userId,                                 
+       90 +      'guardian_username': _username,                         
+       91 +      'user_username': targetUsername,                        
+       92 +      'status': 'pending',                                    
+       93 +    });                                                       
+       94 +  }                                                           
+       95 +                                                              
+       96 +  Future<List<Map<String, dynamic>>> getPendingGuardianRequest
+          +s() async {                                                   
+       97 +    if (_userId == null) return [];                           
+       98 +    final res = await _db                                     
+       99 +        .from('guardian_relationships')                       
+      100 +        .select()                                             
+      101 +        .eq('user_id', _userId!)                              
+      102 +        .eq('status', 'pending');                             
+      103 +    return List<Map<String, dynamic>>.from(res as List);      
+      104 +  }                                                           
+      105 +                                                              
+      106 +  Future<List<Map<String, dynamic>>> getApprovedGuardians() as
+          +ync {                                                         
+      107 +    if (_userId == null) return [];                           
+      108 +    final res = await _db                                     
+      109 +        .from('guardian_relationships')                       
+      110 +        .select()                                             
+      111 +        .eq('user_id', _userId!)                              
+      112 +        .eq('status', 'approved');                            
+      113 +    return List<Map<String, dynamic>>.from(res as List);      
+      114 +  }                                                           
+      115 +                                                              
+      116 +  Future<void> respondToGuardianRequest(String relationshipId,
+      117 +      {required bool approve}) async {                        
+      118 +    await _db                                                 
+      119 +        .from('guardian_relationships')                       
+      120 +        .update({'status': approve ? 'approved' : 'rejected'})
+          +.eq('id', relationshipId);                                    
+      121 +  }                                                           
+      122 +                                                              
+      123 +  // ── Guardian trigger ─────────────────────────────────────
+          +─────────────────                                             
+      124 +                                                              
+      125    Future<void> sendGuardianTrigger(String targetUserId) async 
+           {
+      126      if (!_initialized) return;
+      127      try {
+     ...
+      137  
+      138    bool get initialized => _initialized;
+      139    String? get currentUserId => _userId;
+      140 +  String? get username => _username;                          
+      141  }
+
+● Now update main.dart to check onboarding state and route accordingly:
+
+● Write(lib/main.dart)
+  ⎿  Added 23 lines, removed 14 lines
+       6  import 'package:shared_preferences/shared_preferences.dart';
+       7  import 'package:uuid/uuid.dart';
+       8  
+       9 +import 'models/user_profile.dart';                             
+      10  import 'providers/medication_provider.dart';
+      11  import 'screens/home_screen.dart';
+      12 +import 'screens/guardian_home_screen.dart';                    
+      13 +import 'screens/onboarding_screen.dart';                       
+      14  import 'services/firebase_service.dart';
+      15  import 'services/notification_service.dart';
+      16  import 'services/supabase_service.dart';
+     ...
+      18  void main() async {
+      19    WidgetsFlutterBinding.ensureInitialized();
+      20  
+      18 -  // Supabase (database)                                       
+      21    await SupabaseService.initialize();
+      22  
+      21 -  // Local notifications + alarms (Android only)               
+      23    if (!kIsWeb) {
+      24      await NotificationService.instance.init();
+      25    }
+      26  
+      26 -  // Stable user ID                                            
+      27    final prefs = await SharedPreferences.getInstance();
+      28    String? userId = prefs.getString('userId');
+      29    if (userId == null) {
+     ...
+      31      await prefs.setString('userId', userId);
+      32    }
+      33  
+      34 -  // Firebase (FCM only — free, no Blaze needed)               
+      34    String? fcmToken;
+      35    try {
+      36      await Firebase.initializeApp();
+      37      FirebaseMessaging.onBackgroundMessage(firebaseMessagingBack
+          groundHandler);
+      38      fcmToken = await FcmService.instance.init();
+      40 -  } catch (_) {                                                
+      41 -    // Firebase not configured yet — runs without push notifica
+         -tions                                                          
+      42 -  }                                                            
+      39 +  } catch (_) {}                                               
+      40  
+      44 -  // Supabase service (register user + FCM token)              
+      41    try {
+      42      await SupabaseService.instance.init(userId, fcmToken: fcmTo
+          ken);
+      43    } catch (_) {}
+      44  
+      49 -  runApp(const MedicationApp());                               
+      45 +  // Determine start screen                                    
+      46 +  final username = prefs.getString('username');                
+      47 +  final roleStr = prefs.getString('role');                     
+      48 +  final isOnboarded = username != null && roleStr != null;     
+      49 +                                                               
+      50 +  Widget home;                                                 
+      51 +  if (!isOnboarded) {                                          
+      52 +    home = const OnboardingScreen();                           
+      53 +  } else if (roleStr == UserRole.guardian.name) {              
+      54 +    home = const GuardianHomeScreen();                         
+      55 +  } else {                                                     
+      56 +    home = const HomeScreen();                                 
+      57 +  }                                                            
+      58 +                                                               
+      59 +  runApp(MedicationApp(home: home));                           
+      60  }
+      61  
+      62  class MedicationApp extends StatelessWidget {
+      53 -  const MedicationApp({super.key});                            
+      63 +  final Widget home;                                           
+      64 +  const MedicationApp({super.key, required this.home});        
+      65  
+      66    @override
+      67    Widget build(BuildContext context) {
+     ...
+      71          title: 'MedTrack',
+      72          debugShowCheckedModeBanner: false,
+      73          theme: ThemeData(
+      63 -          colorScheme: ColorScheme.fromSeed(                   
+      64 -            seedColor: const Color(0xFF2E7D32),                
+      65 -          ),                                                   
+      74 +          colorScheme: ColorScheme.fromSeed(seedColor: const Co
+         +lor(0xFF2E7D32)),                                              
+      75            useMaterial3: true,
+      76          ),
+      68 -        home: const HomeScreen(),                              
+      77 +        home: home,                                            
+      78        ),
+      79      );
+      80    }
+
+● Now fix the self-notification bug — remove the local "taken" notification and
+  add a "Manage Guardians" button to the home screen:
+
+● Update(lib/providers/medication_provider.dart)
+  ⎿  Added 2 lines, removed 1 line
+      137      log.status = MedicationStatus.taken;
+      138      log.takenTime = DateTime.now();
+      139      await StorageService.instance.saveLogs(_logs);
+      140 -    if (!kIsWeb) await NotificationService.instance.notifyTake
+          -n(log);                                                       
+      140 +    // Sync to Supabase — guardians see it in real-time via th
+          +eir stream                                                    
+      141 +    // No local self-notification (the guardian gets notified,
+          + not the user)                                                
+      142      try {
+      143        await SupabaseService.instance.syncLog(log);
+      144      } catch (_) {}
+
+● Add the Manage Guardians button to home_screen.dart:
+
+● Update(lib/screens/home_screen.dart)
+  ⎿  Added 1 line, removed 1 line
+       5  import '../providers/medication_provider.dart';
+       6  import 'add_medication_screen.dart';
+       7  import 'history_screen.dart';
+       8 -import 'guardian_screen.dart';                                 
+       8 +import 'manage_guardians_screen.dart';                         
+       9  
+      10  class HomeScreen extends StatefulWidget {
+      11    const HomeScreen({super.key});
+
+● Update(lib/screens/home_screen.dart)
+  ⎿  Added 3 lines, removed 3 lines
+      47              ),
+      48            ),
+      49            IconButton(
+      50 -            icon: const Icon(Icons.people_outline),            
+      51 -            tooltip: 'Guardian',                               
+      50 +            icon: const Icon(Icons.shield_outlined),           
+      51 +            tooltip: 'Manage Guardians',                       
+      52              onPressed: () => Navigator.push(
+      53                context,
+      54 -              MaterialPageRoute(builder: (_) => const GuardianS
+         -creen()),                                                      
+      54 +              MaterialPageRoute(builder: (_) => const ManageGua
+         +rdiansScreen()),                                               
+      55              ),
+      56            ),
+      57          ],
+
+● Finally, add the new SQL table to Supabase. Run this in your SQL Editor:
+
+  alter table users add column username text unique;
+
+  create table guardian_relationships (
+    id uuid default gen_random_uuid() primary key,
+    user_id text not null,
+    guardian_id text not null,
+    guardian_username text,
+    user_username text,
+    status text not null default 'pending',
+    created_at timestamptz default now(),
+    unique(user_id, guardian_id)
+  );
+
+  ---
+  Summary of what changed:
+
+  ┌───────────────────┬──────────────────┬──────────────────────────────────┐
+  │       What        │      Before      │              After               │
+  ├───────────────────┼──────────────────┼──────────────────────────────────┤
+  │ Guardian linking  │ Paste a long     │ Search by @username              │
+  │                   │ UUID             │                                  │
+  ├───────────────────┼──────────────────┼──────────────────────────────────┤
+  │ "Taken"           │ Fires on same    │ Removed — guardian sees via      │
+  │ notification      │ device           │ real-time stream                 │
+  ├───────────────────┼──────────────────┼──────────────────────────────────┤
+  │ First launch      │ Goes straight to │ Onboarding: pick username + role │
+  │                   │  home            │                                  │
+  ├───────────────────┼──────────────────┼──────────────────────────────────┤
+  │ Guardian access   │ Anyone with UUID │ Must send request → user         │
+  │                   │                  │ approves                         │
+  ├───────────────────┼──────────────────┼──────────────────────────────────┤
+  │ Role              │ Mixed in one     │ Separate User / Guardian home    │
+  │                   │ screen           │ screens                          │
+  └───────────────────┴──────────────────┴──────────────────────────────────┘
+
+  Run flutter pub get && flutter run — since you're already onboarded (have a
+  userId in SharedPreferences), you'll need to clear app data once to see the
+  onboarding screen.
+
+❯ arting application from main method in:                                       
+  org-dartlang-app:/web_entrypoint.dart.                                        
+  supabase.supabase_flutter: INFO: ***** Supabase init completed *****          
+  Supabase init error: PostgrestException(message: Could not find the 'id'      
+  column of 'users' in the schema cache, code: PGRST204, details: , hint: null) 
+                                                                                
+                                                                                
+  ⎿  Credit balance too low · Add funds:

@@ -83,7 +83,7 @@ serve(async (req) => {
   const { data: user, error } = await supabase
     .from("users")
     .select("fcm_token")
-    .eq("id", record.target_user_id)
+    .eq("user_id", record.target_user_id)
     .single();
 
   if (error || !user?.fcm_token) {

@@ -137,7 +137,8 @@ class MedicationProvider extends ChangeNotifier {
     log.status = MedicationStatus.taken;
     log.takenTime = DateTime.now();
     await StorageService.instance.saveLogs(_logs);
-    if (!kIsWeb) await NotificationService.instance.notifyTaken(log);
+    // Sync to Supabase — guardians see it in real-time via their stream
+    // No local self-notification (the guardian gets notified, not the user)
     try {
       await SupabaseService.instance.syncLog(log);
     } catch (_) {}

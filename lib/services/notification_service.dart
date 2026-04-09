@@ -172,14 +172,16 @@ class NotificationService {
   // ── Helpers ───────────────────────────────────────────────────────────────
 
   int _alarmId(String medId, String timeStr) {
-    return ((medId.hashCode.abs() & 0xFFFF) << 16) |
-        (timeStr.hashCode.abs() & 0xFFFF);
+    return (((medId.hashCode.abs() & 0x3FFF) << 16) |
+            (timeStr.hashCode.abs() & 0xFFFF))
+        .toSigned(32);
   }
 
   int _notifId(String medId, String timeStr, int delay) {
-    return ((medId.hashCode.abs() & 0xFF) << 24) |
-        ((timeStr.hashCode.abs() & 0xFF) << 16) |
-        (delay & 0xFFFF);
+    return (((medId.hashCode.abs() & 0x7F) << 24) |
+            ((timeStr.hashCode.abs() & 0x7F) << 16) |
+            (delay & 0xFFFF))
+        .toSigned(32);
   }
 
   String _formatTime(DateTime dt) {
