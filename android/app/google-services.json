@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "222242296815",
+    "project_id": "medtrack-07",
+    "storage_bucket": "medtrack-07.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:222242296815:android:cb7bc0fe45bfa20cf51c1a",
+        "android_client_info": {
+          "package_name": "com.kostubh.medication_system"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDIYNMHQq5jA0syx4ZtvLNa2QUPifpuFK8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
