@@ -4,7 +4,10 @@ import '../models/medication.dart';
 import '../providers/medication_provider.dart';
 
 class AddMedicationScreen extends StatefulWidget {
-  const AddMedicationScreen({super.key});
+  /// When set, screen edits this medication (same id, updated fields).
+  final Medication? medication;
+
+  const AddMedicationScreen({super.key, this.medication});
 
   @override
   State<AddMedicationScreen> createState() => _AddMedicationScreenState();
@@ -15,6 +18,22 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
   final _formKey = GlobalKey<FormState>();
   final List<TimeOfDay> _times = [];
   bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final m = widget.medication;
+    if (m != null) {
+      _nameController.text = m.name;
+      for (final t in m.times) {
+        final parts = t.split(':');
+        _times.add(TimeOfDay(
+          hour: int.parse(parts[0]),
+          minute: int.parse(parts[1]),
+        ));
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -53,12 +72,18 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
               '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}')
           .toList();
 
+      final existing = widget.medication;
       final med = Medication(
+        id: existing?.id,
         name: _nameController.text.trim(),
         times: times,
       );
 
-      await context.read<MedicationProvider>().addMedication(med);
+      if (existing != null) {
+        await context.read<MedicationProvider>().updateMedication(med);
+      } else {
+        await context.read<MedicationProvider>().addMedication(med);
+      }
 
       if (mounted) Navigator.pop(context);
     } catch (e) {
@@ -76,7 +101,7 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Add Medication'),
+        title: Text(widget.medication == null ? 'Add Medication' : 'Edit Medication'),
         backgroundColor: const Color(0xFF2E7D32),
         foregroundColor: Colors.white,
         elevation: 0,
@@ -177,9 +202,11 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
                 ),
                 child: _saving
                     ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text(
-                        'Save Medication',
-                        style: TextStyle(fontSize: 16),
+                    : Text(
+                        widget.medication == null
+                            ? 'Save Medication'
+                            : 'Update Medication',
+                        style: const TextStyle(fontSize: 16),
                       ),
               ),
             ),

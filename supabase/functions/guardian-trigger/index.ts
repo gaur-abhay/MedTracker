@@ -73,7 +73,8 @@ serve(async (req) => {
   if (
     record.type !== "guardian_trigger" &&
     record.type !== "log_taken" &&
-    record.type !== "alarm_ack"
+    record.type !== "alarm_ack" &&
+    record.type !== "dose_missed"
   ) {
     return new Response("ignored", { status: 200 });
   }
@@ -104,12 +105,16 @@ serve(async (req) => {
       ? "🚨 Guardian Alert"
       : record.type === "alarm_ack"
       ? "✅ Alarm acknowledged"
+      : record.type === "dose_missed"
+      ? "⚠️ Dose missed"
       : "✅ Medication taken";
   const body =
     record.type === "guardian_trigger"
       ? "Your guardian is asking you to take your medicine NOW"
       : record.type === "alarm_ack"
       ? "The user acknowledged your alarm."
+      : record.type === "dose_missed"
+      ? "A scheduled dose was not taken in time."
       : "The user marked a dose as taken.";
 
   // Send via FCM HTTP v1 API

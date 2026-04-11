@@ -102,6 +102,11 @@ class MedicationProvider extends ChangeNotifier {
         log.status = MedicationStatus.missed;
         try {
           await SupabaseService.instance.syncLog(log);
+          final guardians =
+              await SupabaseService.instance.getApprovedGuardianIds();
+          for (final gid in guardians) {
+            await SupabaseService.instance.sendDoseMissedTrigger(gid);
+          }
         } catch (_) {}
         changed = true;
       }
@@ -117,6 +122,47 @@ class MedicationProvider extends ChangeNotifier {
     if (!kIsWeb) await NotificationService.instance.scheduleMedication(med);
     await _generateTodayLogs();
     notifyListeners();
+  }
+
+  /// Updates schedule/name, reschedules alarms, drops today’s pending slots that no longer exist.
+  Future<void> updateMedication(Medication med) async {
+    final i = _medications.indexWhere((m) => m.id == med.id);
+    if (i < 0) return;
+    _medications[i] = med;
+    await StorageService.instance.saveMedications(_medications);
+    _reconcileLogsAfterMedicationUpdate(med);
+    await StorageService.instance.saveLogs(_logs);
+    if (!kIsWeb) await NotificationService.instance.scheduleMedication(med);
+    await _generateTodayLogs();
+    for (final log in _logs.where((l) => l.medicationId == med.id)) {
+      try {
+        await SupabaseService.instance.syncLog(log);
+      } catch (_) {}
+    }
+    notifyListeners();
+  }
+
+  void _reconcileLogsAfterMedicationUpdate(Medication med) {
+    final now = DateTime.now();
+    final timeSet = med.times.toSet();
+
+    for (final log in _logs) {
+      if (log.medicationId == med.id) {
+        log.medicationName = med.name;
+      }
+    }
+
+    _logs.removeWhere((l) {
+      if (l.medicationId != med.id) return false;
+      final d = l.scheduledTime;
+      if (d.year != now.year || d.month != now.month || d.day != now.day) {
+        return false;
+      }
+      if (l.isTaken || l.isMissed) return false;
+      final hhmm =
+          '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+      return !timeSet.contains(hhmm);
+    });
   }
 
   // ── Remove medication ─────────────────────────────────────────────────────

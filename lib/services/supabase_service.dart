@@ -184,6 +184,19 @@ class SupabaseService {
     }
   }
 
+  Future<void> sendDoseMissedTrigger(String guardianId) async {
+    if (!_initialized) return;
+    try {
+      await _db.from('triggers').insert({
+        'target_user_id': guardianId,
+        'from_user_id': _userId,
+        'type': 'dose_missed',
+      });
+    } catch (e) {
+      print('Supabase dose_missed trigger error: $e');
+    }
+  }
+
   bool get initialized => _initialized;
   String? get currentUserId => _userId;
   String? get username => _username;

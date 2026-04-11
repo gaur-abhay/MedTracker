@@ -3,7 +3,7 @@ enum MedicationStatus { scheduled, alarmTriggered, taken, missed, snoozed }
 class MedicationLog {
   final String id;
   final String medicationId;
-  final String medicationName;
+  String medicationName;
   final DateTime scheduledTime;
   DateTime? takenTime;
   MedicationStatus status;
