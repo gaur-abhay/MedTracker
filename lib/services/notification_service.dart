@@ -4,6 +4,7 @@ import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz;
 import '../models/medication.dart';
 import '../models/medication_log.dart';
+import 'storage_service.dart';
 
 class NotificationService {
   static NotificationService? _instance;
@@ -178,6 +179,53 @@ class NotificationService {
   }
 
   Future<void> stopAlarm(int id) => Alarm.stop(id);
+
+  // ── Reschedule a fired alarm for the next day ────────────────────────────
+  // Call this from the alarm ring stream listener in main.dart.
+
+  Future<void> rescheduleAfterFire(int firedAlarmId) async {
+    final medications = await StorageService.instance.loadMedications();
+
+    for (final med in medications) {
+      for (final timeStr in med.times) {
+        if (_alarmId(med.id, timeStr) == firedAlarmId) {
+          final parts = timeStr.split(':');
+          final now = DateTime.now();
+          // Always schedule for tomorrow — the alarm just fired for today
+          final nextDate = DateTime(
+            now.year, now.month, now.day,
+            int.parse(parts[0]),
+            int.parse(parts[1]),
+          ).add(const Duration(days: 1));
+
+          await Alarm.set(
+            alarmSettings: AlarmSettings(
+              id: firedAlarmId,
+              dateTime: nextDate,
+              assetAudioPath: 'assets/alarm.mp3',
+              loopAudio: true,
+              vibrate: true,
+              volume: 1.0,
+              fadeDuration: 0,
+              warningNotificationOnKill: true,
+              androidFullScreenIntent: true,
+              notificationSettings: NotificationSettings(
+                title: 'Time for your medicine',
+                body: '💊 Take ${med.name} now',
+                stopButton: 'Dismiss',
+              ),
+            ),
+          );
+
+          // Also reschedule follow-up notifications for tomorrow
+          await _scheduleFollowUp(med, nextDate, timeStr, delayMinutes: 10);
+          await _scheduleFollowUp(med, nextDate, timeStr,
+              delayMinutes: 20, isMissed: true);
+          return;
+        }
+      }
+    }
+  }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 

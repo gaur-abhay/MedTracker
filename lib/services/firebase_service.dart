@@ -1,9 +1,11 @@
+import 'package:alarm/alarm.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'notification_service.dart';
 
-// Background FCM handler — fires alarm even when app is killed
+// Background FCM handler — runs in a separate isolate when app is killed.
+// Must initialize Alarm before using it, since the isolate starts fresh.
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   if (message.data['type'] == 'guardian_trigger') {
@@ -12,6 +14,7 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('last_guardian_id', guardianId);
     }
+    await Alarm.init(); // Required — background isolate has no prior state
     await NotificationService.instance.triggerGuardianAlarm();
   }
 }

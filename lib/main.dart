@@ -46,9 +46,12 @@ void main() async {
   if (!kIsWeb) {
     bool guardianAlarmRinging = false;
 
-    Alarm.ringStream.stream.listen((alarmSettings) {
+    Alarm.ringStream.stream.listen((alarmSettings) async {
       if (alarmSettings.id == 88888) {
         guardianAlarmRinging = true;
+      } else {
+        // Medication alarm fired — reschedule for same time tomorrow
+        await NotificationService.instance.rescheduleAfterFire(alarmSettings.id);
       }
     });
 
